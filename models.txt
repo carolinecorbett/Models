@@ -1,0 +1,210 @@
+library(readr)
+cat <- read_csv("Desktop/Catalyst Data/enh_1pct_2017_60cols (1).csv")
+View(cat)
+attach (cat)
+
+#cleaning data
+
+cat$es_n2008g = as.factor (es_n2008g)
+cat$es_n2010g = as.factor (es_n2010g)
+cat$es_n2012g = as.factor (es_n2012g)
+cat$es_n2014g = as.factor (es_n2014g)
+cat$es_n2016p = as.factor (es_n2016p)
+cat$es_n2016g = as.factor (es_n2016g)
+cat$ca_gender = as.factor (ca_gender)
+cat$ca_race = as.factor (ca_race)
+cat$ca_voterstatus = as.factor (ca_voterstatus)
+cat$ca_partyaffiliation = as.factor (ca_partyaffiliation)
+cat$state = as.factor (cat$state)
+cat$es_n2016g = as.ordered (es_n2016g)
+
+#creating dummy for voting in 2016 GE
+
+library (dplyr)
+cat %>% 
+  mutate(dummy16 = 1:2052652) %>%
+  head
+
+cat$dummy16 <- as.numeric (cat$dummy16)
+cat$dummy16 <- replace(cat$dummy16, cat$es_n2016g == 'N',0) 
+cat$dummy16 <- replace(cat$dummy16, cat$es_n2016g == 'U',0) 
+cat$dummy16 <- replace(cat$dummy16, cat$es_n2016g == 'D',1)
+cat$dummy16 <- replace(cat$dummy16, cat$es_n2016g == 'R',1)
+cat$dummy16 <- replace(cat$dummy16, cat$es_n2016g == 'E',1)
+cat$dummy16 <- replace(cat$dummy16, cat$es_n2016g == 'M',1)
+cat$dummy16 <- replace(cat$dummy16, cat$es_n2016g == 'Y',1)
+
+#creating holdout sample
+
+library(caTools)
+cat %>% 
+  mutate(spl = 1:2052652)
+cat$spl=sample.split(cat,SplitRatio=0.75)
+train <- data.frame (cat$spl == T)
+  head (train)
+test <- data.frame (cat$spl == F)
+  head (train)
+
+#logit model
+  
+logitmodel <- glm(train$dummy16 ~ train$es_n2008g + train$es_n2010g + 
+                  train$es_n2012g + train$es_n2014g + train$es_n2016p + 
+                  train$ca_age + train$ca_partyaffiliation +
+                  train$ca_race + train$sy_educscore + train$state + 
+                  train$ac_medianhhincome, data = train, family = "binomial")
+summary (logitmodel)
+
+#testing model
+
+predlogit <- predict(logitmodel, test, type="response")
+thresh <-  1
+predproblogit <- cut(predlogit, breaks=c(-Inf, thresh, Inf), labels=c("lo", "hi"))
+tablelogit <- table(test, predproblogit, dnn=c("actual", "predicted"))
+addmargins(tablelogit)
+
+#lasso model
+independents <- c("train$es_n2008g","train$es_n2010g","train$es_n2012g",
+                  "train$es_n2014g","train$es_n2016p","train$ca_age",
+                  "train$sy_educscore","train$ac_medianhhincome",
+                  "train$ca_partyaffiliation")
+x <- as.matrix(independents)
+y <- as.matrix(train$dummy16)
+
+library(lars)
+lassomodel <- lars(x, y, type="lasso")
+
+summary(lassomodel)
+
+#testing model
+
+best <- lassomodel$df[which.min(lassomodel$RSS)]
+
+predictions <- predict(lassomodel, x, s=best, type="fit")$lassomodel
+
+mse <- mean((y - predictions)^2)
+print(mse)
+
+#CART
+
+library(rpart)
+tree <- rpart(train$dummy16~ train$es_n2014g + train$es_n2016p + 
+                train$ca_age + train$ca_partyaffiliation +
+                train$ca_race + train$sy_educscore + 
+                train$ac_medianhhincome,data = train, method="anova",
+              control=rpart.control(minsplit=1,minbucket=1, cp=0))
+printcp(tree)
+plotcp(tree)
+summary(tree)
+plot(tree, uniform=TRUE, 
+     main="Classification Tree for 2016G Voter Turnout")
+text(tree, use.n=TRUE, all=TRUE, cex=.8)
+
+cartmodel <- rpart(train$dummy16  ~ train$es_n2008g + train$es_n2010g + 
+                                    train$es_n2012g + train$es_n2014g + 
+                                    train$es_n2016p + train$ca_age + 
+                                    train$ca_partyaffiliation + train$ca_race +
+                                    train$sy_educscore + train$state + 
+                                    train$ac_medianhhincome,
+                                    method="anova", data=train)
+#testing model
+
+best <- cartmodel$df[which.min(cartmodel$RSS)]
+
+predictions <- predict(cartmodel, x, s=best, type="fit")$cartmodel
+
+mse <- mean((y - predictions)^2)
+print(mse)
+
+#MRP
+
+#Importing state-level data
+Statelevel <- read.dta("Desktop/state_level_update.dta",convert.underscore = TRUE)
+Statelevel <- Statelevel[order(Statelevel$sstate.initnum),]
+Census <- read.dta("Desktop/poststratification2000.dta",convert.underscore = TRUE)
+Census <- Census[order(Census$cstate),]
+Census$cstate.initnum <- match(Census$cstate, statelevel$sstate)
+
+#Creating indicator variable for race
+cat$ca_race = as.ordered (cat$ca_race)
+library (dplyr)
+cat %>% 
+  mutate(raceord = 1:2052652) %>%
+  head
+
+cat$raceord <- as.numeric (cat$raceord)
+cat$raceord <- replace(cat$raceord, cat$ca_race == 'B',1) 
+cat$raceord <- replace(cat$raceord, cat$ca_race == 'H',2) 
+cat$raceord <- replace(cat$raceord, cat$ca_race == 'W',0)
+
+#Creating indicator variable for gender
+cat$ca_gender = as.ordered (cat$ca_gender)
+cat %>% 
+  mutate(female = 1:2052652) %>%
+  head
+
+cat$female <- as.numeric (cat$female)
+cat$female <- replace(cat$female, cat$ca_gender == 'M',0) 
+cat$female <- replace(cat$female, cat$ca_gender == 'F',1)
+
+#creating indicator for education
+
+summary (cat$sy_educscore)
+cat$edubins <- (cat$sy_educscore)
+cat$edubins <- replace(cat$edubins, cat$sy_educscore  == <.277,0) 
+cat$edubins <- replace(cat$edubins, cat$sy_educscore == <.381,1) 
+cat$edubins <- replace(cat$edubins, cat$sy_educscore == <.528,2) 
+cat$edubins <- replace(cat$edubins, cat$sy_educscore == <.99,3) 
+
+#creating indicator for age
+
+summary (cat$ca_age)
+cat$agebins <- (cat$cat$ca_age)
+cat$agebins <- replace(cat$agebins, cat$sy_educscore  == <30,1) 
+cat$agebins <- replace(cat$agebins, cat$sy_educscore == <45,2) 
+cat$agebins <- replace(cat$agebins, cat$sy_educscore == <65,3) 
+cat$agebins <- replace(cat$agebins, cat$sy_educscore == <117,4)
+
+#creating index variables from Catalyst data
+cat$race.female <- (cat$female *3) + cat$raceord
+cat$age.edu <- 4 * (cat$agebins -1) + cat$edubins
+
+#creating index variables from Census data
+
+Census$crace.female <- (Census$cfemale *3) + Census$crace.WBH
+Census$cage.edu.cat <- 4 * (Census$cage.cat -1) + Census$cedu.cat
+
+#model
+
+mrpmodel <- glmer(formula = yes.of.all ~ (1|race.female) + (1|age.edu)
+                  + (1|edu.cat) + (1|age.edu.cat) + (1|state) + (1|region)
+                  + (1|cat$dummy16) 
+                  family=binomial(link="logit"))
+display (mrpmodel) 
+
+#The following code creates a vector of state random effects that accounts for
+#Alaska and Hawaii
+
+state.ranefs <- array(NA,c(51,1))
+dimnames(state.ranefs) <- list(c(Statelevel$sstate),"effect")
+for(i in Statelevel$sstate){
+  state.ranefs[i,1] <- ranef(individual.model)$state[i,1]
+}
+state.ranefs[,1][is.na(state.ranefs[,1])] <- 0
+
+#creates a prediction for each demographic-state type
+
+cellpred <- invlogit(fixef(individual.model)["(Intercept)"]
+                     +ranef(individual.model)$race.female[Census$crace.female,1]
+                     +ranef(individual.model)$age.cat[Census$cage.cat,1]
+                     +ranef(individual.model)$edu.cat[Census$cedu.cat,1]
+                     +ranef(individual.model)$age.edu.cat[Census$cage.edu.cat,1]
+                     +state.ranefs[Census$cstate,1]
+                     +ranef(individual.model)$region[Census$cregion,1]
+)
+
+#The prediction in each cell needs to be weighted by the actual population 
+#frequency of that cell
+
+cellpredweighted <- cellpred * Census$cpercent.state 
+statepred <- 100* as.vector(tapply(cellpredweighted,Census$cstate,sum))
+statepred
