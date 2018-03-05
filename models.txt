@@ -175,21 +175,11 @@ Census$cage.edu.cat <- 4 * (Census$cage.cat -1) + Census$cedu.cat
 
 #model
 
-mrpmodel <- glmer(formula = yes.of.all ~ (1|race.female) + (1|age.edu)
+mrpmodel <- glmer(formula = cat$dummy16 ~ (1|race.female) + (1|age.edu)
                   + (1|edu.cat) + (1|age.edu.cat) + (1|state) + (1|region)
                   + (1|cat$dummy16) 
                   family=binomial(link="logit"))
 display (mrpmodel) 
-
-#The following code creates a vector of state random effects that accounts for
-#Alaska and Hawaii
-
-state.ranefs <- array(NA,c(51,1))
-dimnames(state.ranefs) <- list(c(Statelevel$sstate),"effect")
-for(i in Statelevel$sstate){
-  state.ranefs[i,1] <- ranef(individual.model)$state[i,1]
-}
-state.ranefs[,1][is.na(state.ranefs[,1])] <- 0
 
 #creates a prediction for each demographic-state type
 
