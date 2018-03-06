@@ -1,5 +1,5 @@
 library(readr)
-cat <- read_csv("Desktop/Catalyst Data/enh_1pct_2017_60cols (1).csv")
+cat <- read_csv("Desktop/C****** Data/******** (1).csv")
 View(cat)
 attach (cat)
 
