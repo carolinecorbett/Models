@@ -1,10 +1,10 @@
 library(readr)
-cat <- read_csv("Desktop/Catalyst Data/enh_1pct_2017_60cols (1).csv")
+cat <- read_csv("********.csv")
 View(cat)
 attach (cat)
 
 library(readr)
-census <- read_csv("Desktop/state_facts_2016.csv")
+census <- read_csv("state_facts_2016.csv")
 View(census)
 attach(state_facts_2016)
 
@@ -24,8 +24,6 @@ cat$state = as.factor (cat$state)
 cat$es_n2016g = as.ordered (es_n2016g)
 
 #creating dummies for voting in GE
-library (dplyr)
-
 cat$dummy16 <- NA
 cat$dummy16 <- replace(cat$dummy16, cat$es_n2016g == 'N',0) 
 cat$dummy16 <- replace(cat$dummy16, cat$es_n2016g == 'U',0) 
@@ -54,7 +52,6 @@ dummy08 <- replace(dummy08, cat$es_n2008g == 'M',1)
 dummy08 <- replace(dummy08, cat$es_n2008g == 'Y',1)
 
 #Creating indicator variable for race
-library (dplyr)
 race <- NA 
 race <- replace(race, cat$ca_race == 'B',2) 
 race <- replace(race, cat$ca_race == 'H',1) 
@@ -84,11 +81,11 @@ age[cat$ca_age < 30] = 1
 #creating index variables
 race.female <- (female *3) + race
 age.edu <- (age *3 ) + edu
-cat$pccage.edu <- NA
-  cat$pcage.edu <- (census$AGE775214 *3 ) + census$EDU685213
-cat$pcrace.female <- NA
-  cat$pcrace.female <- (census$SEX255214 *3 ) + census$RHI125214
-  
+census$pccage.edu <- NA
+census$pcage.edu <- (census$AGE775214 *3 ) + census$EDU685213
+census$pcrace.female <- NA
+census$pcrace.female <- (census$SEX255214 *3 ) + census$RHI125214
+
 #creating holdout sample
 library(caTools)
 set.seed(111) 
@@ -120,4 +117,3 @@ cellpred <- invlogit(fixef(individual.model)["(Intercept)"]
                      +(individual.model)$age[census$AGE775214,1]
                      +(individual.model)$edu[census$EDU685213,1]
                      +(individual.model)$age.edu1[train$pccage.edu,1]
-                     )
